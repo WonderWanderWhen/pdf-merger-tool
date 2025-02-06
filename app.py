@@ -17,8 +17,8 @@ uploaded_files = st.file_uploader(
 if uploaded_files:
     file_data = [{"Filename": f.name} for f in uploaded_files]
 
-    # Drag-and-drop table for reordering
-    file_df = st.experimental_data_editor(
+    # ✅ FIX: Use `st.data_editor` instead of `st.experimental_data_editor`
+    file_df = st.data_editor(
         file_data, num_rows="dynamic", use_container_width=True
     )
 
