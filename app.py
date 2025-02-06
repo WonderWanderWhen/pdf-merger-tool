@@ -54,5 +54,6 @@ if uploaded_files:
         output_path = "merged_output.pdf"
         merged_doc.save(output_path)
 
+        
         st.success("✅ Merged PDF is ready!")
         st.download_button("Download Merged PDF", open(output_path, "rb"), file_name="merged_output.pdf", mime="application/pdf")
