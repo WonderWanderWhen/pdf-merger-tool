@@ -9,11 +9,21 @@ from io import BytesIO
 st.title("📄 PDF Merger Tool")
 st.write("Upload multiple files, reorder them, and merge into a single PDF.")
 
-uploaded_files = st.file_uploader("Upload Files", type=["txt", "docx", "pdf", "jpg", "png", "xlsx"], accept_multiple_files=True)
+# Upload files
+uploaded_files = st.file_uploader(
+    "Upload Files", type=["txt", "docx", "pdf", "jpg", "png", "xlsx"], accept_multiple_files=True
+)
 
 if uploaded_files:
-    file_order = [f.name for f in uploaded_files]
-    reordered_files = st.multiselect("Drag to reorder files", file_order, default=file_order)
+    file_data = [{"Filename": f.name} for f in uploaded_files]
+
+    # Drag-and-drop table for reordering
+    file_df = st.experimental_data_editor(
+        file_data, num_rows="dynamic", use_container_width=True
+    )
+
+    # Get the reordered filenames
+    reordered_files = [row["Filename"] for row in file_df]
 
     if st.button("Merge Files"):
         pdf_docs = []
@@ -40,6 +50,7 @@ if uploaded_files:
                     df = pd.read_excel(file)
                     merged_text += df.to_string() + "\n\n"
 
+        # Convert text to PDF if there's text content
         if merged_text:
             text_pdf = fitz.open()
             text_page = text_pdf.new_page(width=595, height=842)
@@ -47,13 +58,18 @@ if uploaded_files:
             text_page.insert_textbox(text_rect, merged_text, fontsize=12, fontname="helv")
             pdf_docs.insert(0, text_pdf)
 
-        merged_doc = fitz.open()
-        for pdf in pdf_docs:
-            merged_doc.insert_pdf(pdf)
+        # Ensure there are valid pages before merging
+        if not pdf_docs:
+            st.error("⚠️ No valid PDF or image files to merge. Please upload valid files.")
+        else:
+            merged_doc = fitz.open()
+            for pdf in pdf_docs:
+                merged_doc.insert_pdf(pdf)
 
-        output_path = "merged_output.pdf"
-        merged_doc.save(output_path)
+            output_path = "merged_output.pdf"
+            merged_doc.save(output_path)
 
-        
-        st.success("✅ Merged PDF is ready!")
-        st.download_button("Download Merged PDF", open(output_path, "rb"), file_name="merged_output.pdf", mime="application/pdf")
+            st.success("✅ Merged PDF is ready!")
+            st.download_button(
+                "Download Merged PDF", open(output_path, "rb"), file_name="merged_output.pdf", mime="application/pdf"
+            )
