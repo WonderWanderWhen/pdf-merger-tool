@@ -19,9 +19,9 @@ uploaded_files = st.file_uploader(
 
 if uploaded_files:
     st.write("### Uploaded Files:")
-    # Display the uploaded files with indices
+    # Display the uploaded files with indices using st.text to avoid Arrow conversion issues
     for idx, file in enumerate(uploaded_files):
-        st.write(f"{idx+1}: {file.name}")
+        st.text(f"{idx+1}: {file.name}")
 
     # Text input to specify the desired order.
     # Default order is natural order (e.g., "1,2,3,...")
