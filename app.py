@@ -17,7 +17,7 @@ uploaded_files = st.file_uploader(
 if uploaded_files:
     file_data = [{"Filename": f.name} for f in uploaded_files]
 
-    # ✅ FIX: Use `st.data_editor` instead of `st.experimental_data_editor`
+    # ✅ FIX: Use `st.data_editor` for proper drag-and-drop reordering (instead of checkboxes)
     file_df = st.data_editor(
         file_data, num_rows="dynamic", use_container_width=True
     )
@@ -50,7 +50,7 @@ if uploaded_files:
                     df = pd.read_excel(file)
                     merged_text += df.to_string() + "\n\n"
 
-        # Convert text to PDF if there's text content
+        # ✅ Convert `.docx` and `.xlsx` content into a proper PDF
         if merged_text:
             text_pdf = fitz.open()
             text_page = text_pdf.new_page(width=595, height=842)
