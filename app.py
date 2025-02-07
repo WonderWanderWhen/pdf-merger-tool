@@ -1,30 +1,32 @@
 import streamlit as st
-import io
-import os
-from typing import List, Optional
+import sys
+import platform
 
-def main():
-    st.title("📄 PDF Converter Tool")
+st.title("Diagnostic DOCX Converter")
 
-    uploaded_file = st.file_uploader(
-        "Upload File", 
-        type=["docx"],
-        accept_multiple_files=False
-    )
+st.write(f"Python Version: {sys.version}")
+st.write(f"Platform: {platform.platform()}")
 
-    if uploaded_file:
-        try:
-            # Directly read file bytes
-            file_bytes = uploaded_file.read()
-            
-            # Show basic file info
-            st.write(f"File Name: {uploaded_file.name}")
-            st.write(f"File Size: {len(file_bytes)} bytes")
-            
-            st.success("File uploaded successfully!")
-        
-        except Exception as e:
-            st.error(f"Error reading file: {e}")
+try:
+    import docx
+    st.write("python-docx: Installed successfully")
+except ImportError as e:
+    st.error(f"python-docx import failed: {e}")
 
-if __name__ == "__main__":
-    main()
+try:
+    import streamlit
+    st.write(f"Streamlit Version: {streamlit.__version__}")
+except ImportError as e:
+    st.error(f"Streamlit import failed: {e}")
+
+uploaded_file = st.file_uploader("Upload DOCX", type=['docx'])
+
+if uploaded_file:
+    st.write(f"File Name: {uploaded_file.name}")
+    st.write(f"File Size: {uploaded_file.size} bytes")
+    
+    try:
+        file_contents = uploaded_file.getvalue()
+        st.success(f"Successfully read {len(file_contents)} bytes")
+    except Exception as e:
+        st.error(f"Error reading file: {e}")
