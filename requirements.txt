@@ -1,7 +1,8 @@
 streamlit
 python-docx
-PyMuPDF
+pymupdf
 pandas
 pillow
 openpyxl
 tabulate
+
