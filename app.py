@@ -22,8 +22,8 @@ if uploaded_files:
     df = pd.DataFrame(file_data)
     
     st.write("Reorder your files by editing the 'Order' column (lower numbers will appear first).")
-    # Use st.data_editor without the unsupported num_rows parameter
-    edited_df = st.data_editor("Reorder Files", df, use_container_width=True)
+    # Use st.data_editor properly without a positional label
+    edited_df = st.data_editor(df, use_container_width=True)
     
     # Sort the DataFrame by the "Order" column
     sorted_df = edited_df.sort_values("Order")
@@ -35,43 +35,41 @@ if uploaded_files:
         
         # Process files in the order specified by the user
         for filename in ordered_filenames:
-            file = next((f for f in uploaded_files if f.name == filename), None)
-            if file:
-                ext = os.path.splitext(file.name)[1].lower()
-                
-                if ext == ".txt":
-                    merged_text += file.read().decode("utf-8") + "\n\n"
-                
-                elif ext == ".docx":
-                    doc = docx.Document(file)
-                    doc_text = "\n".join([para.text for para in doc.paragraphs])
-                    # Convert DOCX text to a PDF page
-                    text_pdf = fitz.open()
-                    text_page = text_pdf.new_page(width=595, height=842)
-                    text_rect = fitz.Rect(50, 50, 545, 800)
-                    text_page.insert_textbox(text_rect, doc_text, fontsize=12, fontname="helv")
-                    pdf_docs.append(text_pdf)
-                
-                elif ext == ".xlsx":
-                    df_excel = pd.read_excel(file)
-                    excel_text = df_excel.to_string()
-                    # Convert XLSX text to a PDF page
-                    text_pdf = fitz.open()
-                    text_page = text_pdf.new_page(width=595, height=842)
-                    text_rect = fitz.Rect(50, 50, 545, 800)
-                    text_page.insert_textbox(text_rect, excel_text, fontsize=12, fontname="helv")
-                    pdf_docs.append(text_pdf)
-                
-                elif ext == ".pdf":
-                    pdf_docs.append(fitz.open(stream=file.read(), filetype="pdf"))
-                
-                elif ext in (".jpg", ".png"):
-                    img = Image.open(file)
-                    img_bytes = BytesIO()
-                    img.save(img_bytes, format="PDF")
-                    pdf_docs.append(fitz.open("pdf", img_bytes.getvalue()))
+            file_obj = next((f for f in uploaded_files if f.name == filename), None)
+            if file_obj is None:
+                continue
+
+            ext = os.path.splitext(file_obj.name)[1].lower()
+
+            if ext == ".txt":
+                merged_text += file_obj.read().decode("utf-8") + "\n\n"
+            elif ext == ".docx":
+                doc = docx.Document(file_obj)
+                doc_text = "\n".join([para.text for para in doc.paragraphs])
+                # Convert DOCX text to PDF page
+                text_pdf = fitz.open()
+                text_page = text_pdf.new_page(width=595, height=842)
+                text_rect = fitz.Rect(50, 50, 545, 800)
+                text_page.insert_textbox(text_rect, doc_text, fontsize=12, fontname="helv")
+                pdf_docs.append(text_pdf)
+            elif ext == ".xlsx":
+                df_excel = pd.read_excel(file_obj)
+                excel_text = df_excel.to_string()
+                # Convert XLSX text to PDF page
+                text_pdf = fitz.open()
+                text_page = text_pdf.new_page(width=595, height=842)
+                text_rect = fitz.Rect(50, 50, 545, 800)
+                text_page.insert_textbox(text_rect, excel_text, fontsize=12, fontname="helv")
+                pdf_docs.append(text_pdf)
+            elif ext == ".pdf":
+                pdf_docs.append(fitz.open(stream=file_obj.read(), filetype="pdf"))
+            elif ext in (".jpg", ".png"):
+                img = Image.open(file_obj)
+                img_bytes = BytesIO()
+                img.save(img_bytes, format="PDF")
+                pdf_docs.append(fitz.open("pdf", img_bytes.getvalue()))
         
-        # If there is merged text from TXT files, convert it into a PDF page and insert it at the beginning.
+        # If there is merged text from TXT files, convert it into a PDF page and insert at the beginning.
         if merged_text:
             text_pdf = fitz.open()
             text_page = text_pdf.new_page(width=595, height=842)
