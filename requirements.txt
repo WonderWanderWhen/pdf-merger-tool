@@ -1,6 +1,7 @@
-streamlit
+Copystreamlit
 python-docx
 pymupdf
 pandas
 pillow
 matplotlib
+openpyxl
