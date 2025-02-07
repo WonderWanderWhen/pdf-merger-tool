@@ -3,4 +3,5 @@ python-docx
 pymupdf
 pandas
 pillow
-openpyxl
+tabulate
+
