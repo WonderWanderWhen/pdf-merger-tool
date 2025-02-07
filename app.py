@@ -1,12 +1,13 @@
 import streamlit as st
 import docx
-import fitz  # PyMuPDF
+import fitz
 import pandas as pd
 from PIL import Image
 import os
 from io import BytesIO
 import io
 import matplotlib.pyplot as plt
+import pyarrow as pa
 
 st.title("📄 PDF Merger Tool")
 
@@ -17,12 +18,22 @@ uploaded_files = st.file_uploader(
 )
 
 if uploaded_files:
-    file_data = [{"Order": i + 1, "Filename": f.name, "File": f} for i, f in enumerate(uploaded_files)]
+    file_data = []
+    for i, f in enumerate(uploaded_files):
+        file_data.append({"Order": i + 1, "Filename": f.name, "File": f})
     df = pd.DataFrame(file_data)
+
+    df['Order'] = df['Order'].astype(int)  # CRUCIAL: Convert to integer
 
     st.write("### Reorder Files")
     st.write("Edit the 'Order' column (lower numbers will appear first).")
-    edited_df = st.data_editor(df, use_container_width=True)
+
+    try:
+        edited_df = st.data_editor(df, use_container_width=True)
+    except pa.lib.ArrowInvalid as e:
+        st.error(f"ArrowInvalid Error: {e}")
+        st.write("Check if the 'Order' column contains only valid integers.")
+        st.stop()
 
     sorted_df = edited_df.sort_values("Order")
 
