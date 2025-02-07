@@ -8,6 +8,69 @@ from io import BytesIO
 import io
 import matplotlib.pyplot as plt
 
+def process_file(uploaded_file):
+    filename = uploaded_file.name
+    ext = os.path.splitext(filename)[1].lower()
+    
+    try:
+        content = uploaded_file.getvalue()
+        
+        if ext == ".txt":
+            return {"type": "text", "content": content.decode("utf-8")}
+        
+        elif ext == ".docx":
+            doc = docx.Document(io.BytesIO(content))
+            doc_text = "\n".join([para.text for para in doc.paragraphs])
+            return {"type": "docx", "content": doc_text}
+        
+        elif ext == ".xlsx":
+            return {"type": "xlsx", "content": content}
+        
+        elif ext == ".pdf":
+            return {"type": "pdf", "content": content}
+        
+        elif ext in (".jpg", ".png"):
+            return {"type": "image", "content": content}
+        
+        else:
+            st.error(f"Unsupported file type: {ext}")
+            return None
+    
+    except Exception as e:
+        st.error(f"Error processing {filename}: {e}")
+        return None
+
+def create_pdf_from_content(file_type, content):
+    if file_type == "text" or file_type == "docx":
+        text_pdf = fitz.open()
+        text_page = text_pdf.new_page()
+        text_page.insert_textbox(fitz.Rect(50, 50, 550, 800), content, fontsize=12)
+        return text_pdf
+    
+    elif file_type == "xlsx":
+        df_excel = pd.read_excel(io.BytesIO(content), engine='openpyxl')
+        fig, ax = plt.subplots(figsize=(8, 6))
+        ax.table(cellText=df_excel.values, colLabels=df_excel.columns, loc='center')
+        ax.axis('off')
+        plt.tight_layout()
+        img_buf = io.BytesIO()
+        plt.savefig(img_buf, format='png', dpi=300)
+        img_buf.seek(0)
+        img = Image.open(img_buf).convert("RGB")
+        img_bytes = BytesIO()
+        img.save(img_bytes, format="PDF")
+        plt.close(fig)
+        return fitz.open("pdf", img_bytes.getvalue())
+    
+    elif file_type == "pdf":
+        return fitz.open(stream=content, filetype="pdf")
+    
+    elif file_type == "image":
+        img = Image.open(io.BytesIO(content)).convert("RGB")
+        img_bytes = BytesIO()
+        img.save(img_bytes, format="PDF")
+        return fitz.open("pdf", img_bytes.getvalue())
+
 def main():
     st.title("📄 PDF Merger Tool")
 
@@ -17,10 +80,12 @@ def main():
         accept_multiple_files=True
     )
 
-    file_contents = []
     if uploaded_files:
+        file_contents = []
         for f in uploaded_files:
-            file_contents.append({"name": f.name, "content": f.read(), "order": 0})
+            processed_file = process_file(f)
+            if processed_file:
+                file_contents.append({"name": f.name, "processed": processed_file, "order": 0})
         
         st.write("### Reorder Files")
         for i, file_data in enumerate(file_contents):
@@ -34,49 +99,13 @@ def main():
                 merged_text = ""
 
                 for file_data in file_contents:
-                    filename = file_data["name"]
-                    content = file_data["content"]
-                    ext = os.path.splitext(filename)[1].lower()
-
-                    try:
-                        if ext == ".txt":
-                            merged_text += content.decode("utf-8") + "\n\n"
-                        
-                        elif ext == ".docx":
-                            doc = docx.Document(io.BytesIO(content))
-                            doc_text = "\n".join([para.text for para in doc.paragraphs])
-                            text_pdf = fitz.open()
-                            text_page = text_pdf.new_page()
-                            text_page.insert_textbox(fitz.Rect(50, 50, 550, 800), doc_text, fontsize=12)
-                            pdf_docs.append(text_pdf)
-                        
-                        elif ext == ".xlsx":
-                            df_excel = pd.read_excel(io.BytesIO(content), engine='openpyxl')
-                            fig, ax = plt.subplots(figsize=(8, 6))
-                            ax.table(cellText=df_excel.values, colLabels=df_excel.columns, loc='center')
-                            ax.axis('off')
-                            plt.tight_layout()
-                            img_buf = io.BytesIO()
-                            plt.savefig(img_buf, format='png', dpi=300)
-                            img_buf.seek(0)
-                            img = Image.open(img_buf).convert("RGB")
-                            img_bytes = BytesIO()
-                            img.save(img_bytes, format="PDF")
-                            pdf_docs.append(fitz.open("pdf", img_bytes.getvalue()))
-                            plt.close(fig)
-                        
-                        elif ext == ".pdf":
-                            pdf_docs.append(fitz.open(stream=content, filetype="pdf"))
-                        
-                        elif ext in (".jpg", ".png"):
-                            img = Image.open(io.BytesIO(content)).convert("RGB")
-                            img_bytes = BytesIO()
-                            img.save(img_bytes, format="PDF")
-                            pdf_docs.append(fitz.open("pdf", img_bytes.getvalue()))
+                    processed = file_data["processed"]
                     
-                    except Exception as e:
-                        st.error(f"Error processing {filename}: {e}")
-                        return
+                    if processed["type"] == "text":
+                        merged_text += processed["content"] + "\n\n"
+                    else:
+                        pdf_doc = create_pdf_from_content(processed["type"], processed["content"])
+                        pdf_docs.append(pdf_doc)
 
                 if merged_text:
                     text_pdf = fitz.open()
