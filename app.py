@@ -36,40 +36,34 @@ if uploaded_files:
 
                 if ext == ".txt":
                     merged_text += file.read().decode("utf-8") + "\n\n"
+
                 elif ext == ".docx":
                     doc = docx.Document(file)
-                    merged_text += "\n".join([para.text for para in doc.paragraphs]) + "\n\n"
+                    doc_text = "\n".join([para.text for para in doc.paragraphs])
+
+                    # Convert `.docx` text to PDF
+                    text_pdf = fitz.open()
+                    text_page = text_pdf.new_page(width=595, height=842)
+                    text_rect = fitz.Rect(50, 50, 545, 800)
+                    text_page.insert_textbox(text_rect, doc_text, fontsize=12, fontname="helv")
+                    pdf_docs.append(text_pdf)
+
+                elif ext == ".xlsx":
+                    df = pd.read_excel(file)
+                    excel_text = df.to_string()
+
+                    # Convert `.xlsx` text to PDF
+                    text_pdf = fitz.open()
+                    text_page = text_pdf.new_page(width=595, height=842)
+                    text_rect = fitz.Rect(50, 50, 545, 800)
+                    text_page.insert_textbox(text_rect, excel_text, fontsize=12, fontname="helv")
+                    pdf_docs.append(text_pdf)
+
                 elif ext == ".pdf":
                     pdf_docs.append(fitz.open(stream=file.read(), filetype="pdf"))
+
                 elif ext in (".jpg", ".png"):
                     img = Image.open(file)
                     img_bytes = BytesIO()
                     img.save(img_bytes, format="PDF")
-                    pdf_docs.append(fitz.open("pdf", img_bytes.getvalue()))
-                elif ext == ".xlsx":
-                    df = pd.read_excel(file)
-                    merged_text += df.to_string() + "\n\n"
-
-        # ✅ Convert `.docx` and `.xlsx` content into a proper PDF
-        if merged_text:
-            text_pdf = fitz.open()
-            text_page = text_pdf.new_page(width=595, height=842)
-            text_rect = fitz.Rect(50, 50, 545, 800)
-            text_page.insert_textbox(text_rect, merged_text, fontsize=12, fontname="helv")
-            pdf_docs.insert(0, text_pdf)
-
-        # Ensure there are valid pages before merging
-        if not pdf_docs:
-            st.error("⚠️ No valid PDF or image files to merge. Please upload valid files.")
-        else:
-            merged_doc = fitz.open()
-            for pdf in pdf_docs:
-                merged_doc.insert_pdf(pdf)
-
-            output_path = "merged_output.pdf"
-            merged_doc.save(output_path)
-
-            st.success("✅ Merged PDF is ready!")
-            st.download_button(
-                "Download Merged PDF", open(output_path, "rb"), file_name="merged_output.pdf", mime="application/pdf"
-            )
+        
