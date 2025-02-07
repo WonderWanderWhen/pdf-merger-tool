@@ -27,8 +27,8 @@ if uploaded_files:
     df = pd.DataFrame(file_data)
     
     st.write("### Reorder Files")
-    st.write("Edit the 'Order' column (lower numbers appear first).")
-    # Use st.data_editor without a positional label
+    st.write("Edit the 'Order' column (lower numbers will appear first).")
+    # Use st.data_editor to allow manual editing of the DataFrame
     edited_df = st.data_editor(df, use_container_width=True)
     
     # Sort the DataFrame by the "Order" column to get the final order
@@ -37,11 +37,9 @@ if uploaded_files:
     
     if st.button("Merge Files"):
         pdf_docs = []      # List to store PDF objects
-        merged_text = ""   # For TXT file content
+        merged_text = ""   # For TXT content
         
-        # Process files in the specified order
         for filename in ordered_filenames:
-            # Find the corresponding file object
             file_obj = next((f for f in uploaded_files if f.name == filename), None)
             if not file_obj:
                 continue
@@ -49,16 +47,16 @@ if uploaded_files:
             ext = os.path.splitext(file_obj.name)[1].lower()
             
             if ext == ".txt":
-                # Read text file and append its content
                 try:
                     merged_text += file_obj.read().decode("utf-8") + "\n\n"
                 except Exception as e:
                     st.error(f"Error reading {file_obj.name}: {e}")
+            
             elif ext == ".docx":
-                # Read DOCX file, extract text, and convert to a PDF page
                 try:
                     doc = docx.Document(file_obj)
                     doc_text = "\n".join([para.text for para in doc.paragraphs])
+                    # Convert DOCX text to a PDF page
                     text_pdf = fitz.open()
                     text_page = text_pdf.new_page(width=595, height=842)
                     text_rect = fitz.Rect(50, 50, 545, 800)
@@ -66,27 +64,30 @@ if uploaded_files:
                     pdf_docs.append(text_pdf)
                 except Exception as e:
                     st.error(f"Error processing DOCX {file_obj.name}: {e}")
+            
             elif ext == ".xlsx":
-                # Read Excel file, format as grid using tabulate, and convert to PDF
                 try:
+                    # Ensure we're at the beginning of the file
+                    file_obj.seek(0)
                     df_excel = pd.read_excel(file_obj)
+                    # Format the DataFrame as a grid with headers using tabulate
                     excel_text = tabulate(df_excel, headers="keys", tablefmt="grid")
                     text_pdf = fitz.open()
                     text_page = text_pdf.new_page(width=595, height=842)
-                    # Use a larger text box area with smaller margins and font size 8
-                    text_rect = fitz.Rect(20, 20, 575, 822)
-                    text_page.insert_textbox(text_rect, excel_text, fontsize=8, fontname="helv")
+                    # Use full-page dimensions and a small font size to show more content
+                    text_rect = fitz.Rect(0, 0, 595, 842)
+                    text_page.insert_textbox(text_rect, excel_text, fontsize=6, fontname="helv")
                     pdf_docs.append(text_pdf)
                 except Exception as e:
                     st.error(f"Error processing XLSX {file_obj.name}: {e}")
+            
             elif ext == ".pdf":
-                # Open PDF files
                 try:
                     pdf_docs.append(fitz.open(stream=file_obj.read(), filetype="pdf"))
                 except Exception as e:
                     st.error(f"Error processing PDF {file_obj.name}: {e}")
+            
             elif ext in (".jpg", ".png"):
-                # Convert image to PDF page
                 try:
                     img = Image.open(file_obj)
                     img_bytes = BytesIO()
@@ -95,7 +96,7 @@ if uploaded_files:
                 except Exception as e:
                     st.error(f"Error processing image {file_obj.name}: {e}")
         
-        # If there's merged text from TXT files, convert it into a PDF page and insert it at the beginning.
+        # If there's merged text from TXT files, convert it to a PDF page and insert at the beginning.
         if merged_text:
             text_pdf = fitz.open()
             text_page = text_pdf.new_page(width=595, height=842)
@@ -104,7 +105,7 @@ if uploaded_files:
             pdf_docs.insert(0, text_pdf)
         
         if not pdf_docs:
-            st.error("⚠️ No valid PDF, DOCX, XLSX, or image files to merge. Please upload valid files.")
+            st.error("⚠️ No valid files to merge. Please upload valid files.")
         else:
             merged_doc = fitz.open()
             for pdf in pdf_docs:
