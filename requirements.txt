@@ -1,7 +1,6 @@
 streamlit
-python-docx
+docx
 pymupdf
 pandas
 pillow
-tabulate
-
+matplotlib
