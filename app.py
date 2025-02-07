@@ -19,12 +19,11 @@ uploaded_files = st.file_uploader(
 
 if uploaded_files:
     st.write("### Uploaded Files:")
-    # Display the uploaded files with indices using st.text to avoid Arrow conversion issues
+    # List the uploaded files with indices (using st.text to avoid Arrow conversion issues)
     for idx, file in enumerate(uploaded_files):
         st.text(f"{idx+1}: {file.name}")
 
-    # Text input to specify the desired order.
-    # Default order is natural order (e.g., "1,2,3,...")
+    # Default order is the natural order (e.g., "1,2,3,...")
     default_order = ",".join([str(i + 1) for i in range(len(uploaded_files))])
     order_input = st.text_input(
         "Enter desired order as comma-separated indices (e.g., 2,1,3)", value=default_order
@@ -38,7 +37,6 @@ if uploaded_files:
                 st.error("The number of indices does not match the number of uploaded files.")
                 ordered_files = uploaded_files
             else:
-                # Validate indices: they must be in the range 1 to len(uploaded_files)
                 if any(i < 1 or i > len(uploaded_files) for i in order_list):
                     st.error("One or more indices are out of range.")
                     ordered_files = uploaded_files
