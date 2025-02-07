@@ -1,5 +1,5 @@
 streamlit
-docx
+python-docx
 pymupdf
 pandas
 pillow
