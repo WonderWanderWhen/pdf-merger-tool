@@ -9,11 +9,6 @@ import io
 import matplotlib.pyplot as plt
 
 st.title("📄 PDF Merger Tool")
-st.write(
-    "Upload multiple files, then reorder them by editing the 'Order' column. "
-    "After clicking 'Merge Files', the content of TXT, DOCX, XLSX, PDF, and image files "
-    "will be merged into a single PDF."
-)
 
 uploaded_files = st.file_uploader(
     "Upload Files",
@@ -55,7 +50,7 @@ if uploaded_files:
                 elif ext == ".xlsx":
                     df_excel = pd.read_excel(file_obj)
 
-                    fig, ax = plt.subplots(figsize=(8, 6))  # Adjust figure size as needed
+                    fig, ax = plt.subplots(figsize=(8, 6))
                     ax.table(cellText=df_excel.values, colLabels=df_excel.columns, loc='center')
                     ax.axis('off')
                     plt.tight_layout()
