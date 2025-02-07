@@ -18,35 +18,38 @@ uploaded_files = st.file_uploader(
 )
 
 if uploaded_files:
-    file_data = []
+    # Create a dictionary to store filenames and their order
+    file_order = {}
     for i, f in enumerate(uploaded_files):
-        file_data.append({"Order": i + 1, "Filename": f.name}) # Store only order and filename
-    df = pd.DataFrame(file_data)
+        file_order[f.name] = i + 1  # Store the initial order
 
-    df['Order'] = df['Order'].astype(int)
-
-    st.write("### Reorder Files")
-    st.write("Edit the 'Order' column (lower numbers will appear first).")
-
-    try:
-        edited_df = st.data_editor(df, use_container_width=True)
-    except pa.lib.ArrowInvalid as e:
-        st.error(f"ArrowInvalid Error: {e}")
-        st.write("Check if the 'Order' column contains only valid integers.")
-        st.stop()
-
-    sorted_df = edited_df.sort_values("Order")
-    ordered_filenames = sorted_df["Filename"].tolist()  # Get the ordered filenames
-
+    # Create a DataFrame *only* when the "Merge Files" button is clicked
     if st.button("Merge Files"):
+        file_data = []
+        for filename, order in file_order.items():  # Use stored order
+            file_data.append({"Order": order, "Filename": filename})
+        df = pd.DataFrame(file_data)
+        df['Order'] = df['Order'].astype(int)
+
+        try:
+            sorted_df = df.sort_values("Order")  # Sort before data_editor
+            ordered_filenames = sorted_df["Filename"].tolist()
+
+        except pa.lib.ArrowInvalid as e:
+            st.error(f"ArrowInvalid Error: {e}")
+            st.write("Check if the 'Order' column contains only valid integers.")
+            st.stop()
+
+
+
         pdf_docs = []
         merged_text = ""
 
-        for filename in ordered_filenames: # Iterate through filenames
-            file_obj = next((f for f in uploaded_files if f.name == filename), None) # Find the file object
+        for filename in ordered_filenames:
+            file_obj = next((f for f in uploaded_files if f.name == filename), None)
             if not file_obj:
-                continue # Skip if file object not found (shouldn't happen)
+                continue
 
             ext = os.path.splitext(filename)[1].lower()
 
-            # ... (Rest of the file processing code from my previous correct response - remains the same)
+            # ... (Rest of the file processing code - remains the same)
