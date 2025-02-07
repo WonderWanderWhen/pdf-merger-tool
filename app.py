@@ -8,7 +8,7 @@ from io import BytesIO
 from tabulate import tabulate  # For formatting Excel tables
 
 st.title("📄 PDF Merger Tool")
-st.write("Upload multiple files and specify the desired order using comma-separated indices (e.g., 2,1,3).")
+st.write("Upload multiple files, specify the desired order using comma-separated indices, and merge them into a single PDF.")
 
 # Upload files
 uploaded_files = st.file_uploader(
@@ -19,11 +19,11 @@ uploaded_files = st.file_uploader(
 
 if uploaded_files:
     st.write("### Uploaded Files:")
-    # List the uploaded files (only display their names)
-    for idx, file in enumerate(uploaded_files):
-        st.text(f"{idx+1}: {file.name}")
+    # List the uploaded files with their indices using st.write (simple text output)
+    for i, f in enumerate(uploaded_files):
+        st.write(f"{i+1}: {f.name}")
 
-    # Use a text input to specify order; default is natural order (e.g., "1,2,3,...")
+    # Text input for file order (comma-separated indices)
     default_order = ",".join([str(i + 1) for i in range(len(uploaded_files))])
     order_input = st.text_input(
         "Enter desired order as comma-separated indices (e.g., 2,1,3). Leave blank to use the natural order.",
@@ -31,19 +31,19 @@ if uploaded_files:
     )
 
     if st.button("Merge Files"):
+        # Process the order input
         try:
-            # Convert the input into a list of integers (1-indexed)
             order_list = [int(x.strip()) for x in order_input.split(",") if x.strip() != ""]
             if len(order_list) != len(uploaded_files):
                 st.error("The number of indices does not match the number of uploaded files.")
                 ordered_files = uploaded_files
             else:
-                # Validate indices
+                # Validate that indices are within range
                 if any(i < 1 or i > len(uploaded_files) for i in order_list):
                     st.error("One or more indices are out of range.")
                     ordered_files = uploaded_files
                 else:
-                    # Reorder files using the provided indices (convert to 0-indexed)
+                    # Reorder files (convert from 1-indexed to 0-indexed)
                     ordered_files = [uploaded_files[i - 1] for i in order_list]
         except Exception as e:
             st.error("Invalid input for order. Please enter comma-separated numbers.")
@@ -74,15 +74,14 @@ if uploaded_files:
                     st.error(f"Error processing DOCX {file_obj.name}: {e}")
             elif ext == ".xlsx":
                 try:
-                    file_obj.seek(0)
                     df_excel = pd.read_excel(file_obj)
                     # Format the DataFrame as a grid with headers using tabulate
                     excel_text = tabulate(df_excel, headers="keys", tablefmt="grid")
                     text_pdf = fitz.open()
                     text_page = text_pdf.new_page(width=595, height=842)
-                    # Use nearly full page dimensions and a small font size to fit more content
-                    text_rect = fitz.Rect(20, 20, 575, 822)
-                    text_page.insert_textbox(text_rect, excel_text, fontsize=6, fontname="helv")
+                    # Use a slightly smaller font size to try to fit the table
+                    text_rect = fitz.Rect(50, 50, 545, 800)
+                    text_page.insert_textbox(text_rect, excel_text, fontsize=10, fontname="helv")
                     pdf_docs.append(text_pdf)
                 except Exception as e:
                     st.error(f"Error processing XLSX {file_obj.name}: {e}")
@@ -100,7 +99,7 @@ if uploaded_files:
                 except Exception as e:
                     st.error(f"Error processing image {file_obj.name}: {e}")
 
-        # If there is merged text from TXT files, convert it into a PDF page and add it at the beginning.
+        # If there is merged text from TXT files, convert it to a PDF page and insert at the beginning.
         if merged_text:
             text_pdf = fitz.open()
             text_page = text_pdf.new_page(width=595, height=842)
