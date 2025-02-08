@@ -1,7 +1,5 @@
-streamlit
+gradio>=5.15.0
 python-docx
 pymupdf
 pandas
 pillow
-openpyxl
-tabulate
