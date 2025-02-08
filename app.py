@@ -5,20 +5,52 @@ import pandas as pd
 from PIL import Image
 import os
 from io import BytesIO
+import tempfile
+
+def get_file_paths(files):
+    """
+    Convert a list of uploaded file objects into a list of plain file paths.
+    If a file is not already a simple file path, write its data to a temporary file.
+    """
+    file_paths = []
+    for f in files:
+        try:
+            # If f is already a simple file path (a string), use it.
+            if isinstance(f, str):
+                file_paths.append(f)
+            # If f is a dict (as returned by gr.Files with type="bytes"),
+            # then write its "data" to a temporary file.
+            elif isinstance(f, dict):
+                fname = f.get("name", "uploaded_file")
+                data = f.get("data")
+                temp_path = os.path.join(tempfile.gettempdir(), fname)
+                with open(temp_path, "wb") as out:
+                    out.write(data)
+                file_paths.append(temp_path)
+            # Otherwise, if it's an object with a .name attribute, use that.
+            else:
+                file_paths.append(f.name)
+        except Exception as e:
+            print("Error converting file:", e)
+    return file_paths
 
 def process_files(files, order, pdf_name):
     """
-    Process the uploaded files (which are file paths) in the user-specified order,
+    Process the uploaded files (using their file paths) in the user-specified order,
     merge their contents into a single PDF, and return it.
     """
     if not files or not order:
         return "Warning: No files uploaded or order not set!", None
 
+    # Convert all uploaded files into plain file paths.
+    file_paths = get_file_paths(files)
+    
     pdf_docs = []      # List to store PDFs (or text converted to PDF)
     image_files = []   # List to store image file paths
     merged_text = ""   # To accumulate text content
 
-    # 'order' is a list of strings like "0: filename". Extract the index.
+    # The ordering dropdown returns strings in the format "index: filename".
+    # Process files in that order.
     for o in order:
         try:
             idx = int(o.split(":")[0])
@@ -26,7 +58,7 @@ def process_files(files, order, pdf_name):
             print("Error converting order element", o, e)
             continue
 
-        file_path = files[idx]  # file_path is a string
+        file_path = file_paths[idx]
         fname = os.path.basename(file_path)
         ext = os.path.splitext(fname)[1].lower()
 
@@ -44,13 +76,13 @@ def process_files(files, order, pdf_name):
             df = pd.read_excel(file_path)
             merged_text += df.to_string() + "\n\n"
 
-    # Convert any merged text into a PDF page.
+    # If text was extracted from any files, convert it into a PDF page.
     if merged_text:
         text_pdf = fitz.open()
         text_page = text_pdf.new_page(width=595, height=842)  # A4 size
         text_rect = fitz.Rect(50, 50, 545, 800)
         text_page.insert_textbox(text_rect, merged_text, fontsize=12, fontname="helv")
-        pdf_docs.insert(0, text_pdf)  # Insert text PDF at the beginning
+        pdf_docs.insert(0, text_pdf)
 
     # Create a new PDF document and merge all PDF pages.
     merged_doc = fitz.open()
@@ -75,29 +107,28 @@ def process_files(files, order, pdf_name):
     final_pdf_path = f"{pdf_name}.pdf"
     merged_doc.save(final_pdf_path)
     
-    # Read the merged PDF as bytes and return a dict (so gr.File can handle it)
+    # Read the merged PDF back as bytes so gr.File can serve it.
     with open(final_pdf_path, "rb") as f:
         pdf_bytes = f.read()
     return f"PDF '{pdf_name}.pdf' is ready for download!", {"name": f"{pdf_name}.pdf", "data": pdf_bytes}
 
 def reorder_files(files):
     """
-    Build a list of simple strings (e.g., "0: filename") for the ordering dropdown.
-    Since files are now plain strings (file paths), we extract the basename.
+    Build a list of plain strings (e.g., "0: filename") for the ordering dropdown.
+    Uses the plain file paths obtained via get_file_paths.
     """
     if not files:
         return gr.update(value=[], choices=[]), []
-    choices = []
-    for i, file_path in enumerate(files):
-        fname = os.path.basename(file_path)
-        choices.append(f"{i}: {fname}")
+    file_paths = get_file_paths(files)
+    names = [os.path.basename(fp) for fp in file_paths]
+    choices = [f"{i}: {n}" for i, n in enumerate(names)]
     return gr.update(value=choices, choices=choices), choices
 
 with gr.Blocks() as demo:
     gr.Markdown("# PDF Merger Tool")
     gr.Markdown("Upload files, arrange them via drag-and-drop, and get your merged PDF!")
     
-    # Use gr.Files with type="file" to get file paths (plain strings)
+    # Use gr.Files with type="file" to return plain file paths if possible.
     file_input = gr.Files(
         file_types=[".txt", ".docx", ".pdf", ".jpg", ".png", ".xlsx"],
         label="Upload Files",
