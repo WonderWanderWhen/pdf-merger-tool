@@ -7,7 +7,7 @@ import os
 from io import BytesIO
 import re
 
-# ✅ Function to merge files
+# Function to merge files
 def process_files(files, order, pdf_name):
     if not files or not order:
         return "Warning: No files uploaded or order not set!", None
@@ -15,32 +15,32 @@ def process_files(files, order, pdf_name):
     pdf_docs = []
     image_files = []
     merged_text = ""
-
+    
     for index in order:
         filename = files[index].name
         ext = os.path.splitext(filename)[1].lower()
 
-        if ext == ".txt":  
+        if ext == ".txt":
             with open(filename, "r", encoding="utf-8") as f:
                 merged_text += f.read() + "\n\n"
 
-        elif ext == ".docx":  
+        elif ext == ".docx":
             doc = docx.Document(filename)
             merged_text += "\n".join([para.text for para in doc.paragraphs]) + "\n\n"
 
-        elif ext == ".pdf":  
+        elif ext == ".pdf":
             pdf_docs.append(fitz.open(filename))
 
-        elif ext in (".jpg", ".png"):  
+        elif ext in (".jpg", ".png"):
             image_files.append(filename)
 
-        elif ext == ".xlsx":  
+        elif ext == ".xlsx":
             df = pd.read_excel(filename)
             merged_text += df.to_string() + "\n\n"
 
     if merged_text:
         text_pdf = fitz.open()
-        text_page = text_pdf.new_page(width=595, height=842)  
+        text_page = text_pdf.new_page(width=595, height=842)  # A4 size
         text_rect = fitz.Rect(50, 50, 545, 800)
         text_page.insert_textbox(text_rect, merged_text, fontsize=12, fontname="helv")
         pdf_docs.insert(0, text_pdf)
@@ -71,35 +71,33 @@ def process_files(files, order, pdf_name):
 
     return f"PDF '{pdf_name}.pdf' is ready for download!", final_pdf_path
 
-# ✅ Fix: Ensure file selection dropdown updates correctly
+# Updated reorder_files function
 def reorder_files(files):
-    if not files:
-        return "Warning: Please upload files!", [], []
+    try:
+        if not files:
+            return "Warning: Please upload files!", [], []
+        file_names = [str(file.name) for file in files]
+        order_choices = list(range(len(file_names)))
+        return gr.update(value=file_names, choices=file_names), order_choices
+    except Exception as e:
+        print("Error in reorder_files:", e)
+        return gr.update(value=[], choices=[]), []
 
-    file_names = [file.name for file in files]
-    order_choices = list(range(len(file_names)))  # Ensure choices are properly set
-
-    return gr.update(value=file_names, choices=file_names), order_choices
-
-# ✅ Create Gradio interface
+# Create Gradio interface
 with gr.Blocks() as demo:
     gr.Markdown("# PDF Merger Tool")
     gr.Markdown("Upload files, set order, and get your merged PDF!")
 
     file_input = gr.Files(file_types=[".txt", ".docx", ".pdf", ".jpg", ".png", ".xlsx"], label="Upload Files", interactive=True)
-
     order_input = gr.Dropdown([], multiselect=True, label="Select Order (Drag to Rearrange)", interactive=True)
-    
     pdf_name_input = gr.Textbox(label="Enter PDF Name", value="Merged_Document")
-
     submit_button = gr.Button("Merge & Download PDF")
     output_message = gr.Textbox(label="Status")
     output_pdf = gr.File(label="Download Merged PDF")
 
-    # ✅ Fix: Ensure file selection dropdown updates properly
+    # When files are uploaded, populate order selection
     file_input.change(reorder_files, [file_input], [order_input])
-
     submit_button.click(process_files, [file_input, order_input, pdf_name_input], [output_message, output_pdf])
 
-# ✅ Launch Web App
+# Launch the app with share=True for a public link
 demo.launch(share=True)
