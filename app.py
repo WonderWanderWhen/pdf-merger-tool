@@ -1,126 +1,105 @@
-import streamlit as st
+import gradio as gr
 import docx
 import fitz  # PyMuPDF
 import pandas as pd
 from PIL import Image
 import os
 from io import BytesIO
-from tabulate import tabulate  # For formatting Excel tables
+import re
 
-st.title("📄 PDF Merger Tool")
-st.write("Upload multiple files, specify the desired order using comma-separated indices, and merge them into a single PDF.")
+# ✅ Function to merge files
+def process_files(files, order, pdf_name):
+    if not files or not order:
+        return "Warning: No files uploaded or order not set!", None
 
-# Upload files
-uploaded_files = st.file_uploader(
-    "Upload Files",
-    type=["txt", "docx", "pdf", "jpg", "png", "xlsx"],
-    accept_multiple_files=True
-)
+    pdf_docs = []
+    image_files = []
+    merged_text = ""
 
-if uploaded_files:
-    st.write("### Uploaded Files:")
-    # List the uploaded files with their indices using st.write (simple text output)
-    for i, f in enumerate(uploaded_files):
-        st.write(f"{i+1}: {f.name}")
+    for index in order:
+        filename = files[index].name
+        ext = os.path.splitext(filename)[1].lower()
 
-    # Text input for file order (comma-separated indices)
-    default_order = ",".join([str(i + 1) for i in range(len(uploaded_files))])
-    order_input = st.text_input(
-        "Enter desired order as comma-separated indices (e.g., 2,1,3). Leave blank to use the natural order.",
-        value=default_order
-    )
+        if ext == ".txt":  
+            with open(filename, "r", encoding="utf-8") as f:
+                merged_text += f.read() + "\n\n"
 
-    if st.button("Merge Files"):
-        # Process the order input
-        try:
-            order_list = [int(x.strip()) for x in order_input.split(",") if x.strip() != ""]
-            if len(order_list) != len(uploaded_files):
-                st.error("The number of indices does not match the number of uploaded files.")
-                ordered_files = uploaded_files
-            else:
-                # Validate that indices are within range
-                if any(i < 1 or i > len(uploaded_files) for i in order_list):
-                    st.error("One or more indices are out of range.")
-                    ordered_files = uploaded_files
-                else:
-                    # Reorder files (convert from 1-indexed to 0-indexed)
-                    ordered_files = [uploaded_files[i - 1] for i in order_list]
-        except Exception as e:
-            st.error("Invalid input for order. Please enter comma-separated numbers.")
-            ordered_files = uploaded_files
+        elif ext == ".docx":  
+            doc = docx.Document(filename)
+            merged_text += "\n".join([para.text for para in doc.paragraphs]) + "\n\n"
 
-        pdf_docs = []     # List to store PDF objects for merging
-        merged_text = ""  # For TXT file content
+        elif ext == ".pdf":  
+            pdf_docs.append(fitz.open(filename))
 
-        # Process each file in the specified order
-        for file_obj in ordered_files:
-            ext = os.path.splitext(file_obj.name)[1].lower()
-            if ext == ".txt":
-                try:
-                    merged_text += file_obj.read().decode("utf-8") + "\n\n"
-                except Exception as e:
-                    st.error(f"Error reading {file_obj.name}: {e}")
-            elif ext == ".docx":
-                try:
-                    doc = docx.Document(file_obj)
-                    doc_text = "\n".join([para.text for para in doc.paragraphs])
-                    # Convert DOCX text to a PDF page
-                    text_pdf = fitz.open()
-                    text_page = text_pdf.new_page(width=595, height=842)
-                    text_rect = fitz.Rect(50, 50, 545, 800)
-                    text_page.insert_textbox(text_rect, doc_text, fontsize=12, fontname="helv")
-                    pdf_docs.append(text_pdf)
-                except Exception as e:
-                    st.error(f"Error processing DOCX {file_obj.name}: {e}")
-            elif ext == ".xlsx":
-                try:
-                    df_excel = pd.read_excel(file_obj)
-                    # Format the DataFrame as a grid with headers using tabulate
-                    excel_text = tabulate(df_excel, headers="keys", tablefmt="grid")
-                    text_pdf = fitz.open()
-                    text_page = text_pdf.new_page(width=595, height=842)
-                    # Use a slightly smaller font size to try to fit the table
-                    text_rect = fitz.Rect(50, 50, 545, 800)
-                    text_page.insert_textbox(text_rect, excel_text, fontsize=10, fontname="helv")
-                    pdf_docs.append(text_pdf)
-                except Exception as e:
-                    st.error(f"Error processing XLSX {file_obj.name}: {e}")
-            elif ext == ".pdf":
-                try:
-                    pdf_docs.append(fitz.open(stream=file_obj.read(), filetype="pdf"))
-                except Exception as e:
-                    st.error(f"Error processing PDF {file_obj.name}: {e}")
-            elif ext in (".jpg", ".png"):
-                try:
-                    img = Image.open(file_obj)
-                    img_bytes = BytesIO()
-                    img.save(img_bytes, format="PDF")
-                    pdf_docs.append(fitz.open("pdf", img_bytes.getvalue()))
-                except Exception as e:
-                    st.error(f"Error processing image {file_obj.name}: {e}")
+        elif ext in (".jpg", ".png"):  
+            image_files.append(filename)
 
-        # If there is merged text from TXT files, convert it to a PDF page and insert at the beginning.
-        if merged_text:
-            text_pdf = fitz.open()
-            text_page = text_pdf.new_page(width=595, height=842)
-            text_rect = fitz.Rect(50, 50, 545, 800)
-            text_page.insert_textbox(text_rect, merged_text, fontsize=12, fontname="helv")
-            pdf_docs.insert(0, text_pdf)
+        elif ext == ".xlsx":  
+            df = pd.read_excel(filename)
+            merged_text += df.to_string() + "\n\n"
 
-        if not pdf_docs:
-            st.error("⚠️ No valid files to merge. Please upload valid files.")
-        else:
-            merged_doc = fitz.open()
-            for pdf in pdf_docs:
-                merged_doc.insert_pdf(pdf)
+    if merged_text:
+        text_pdf = fitz.open()
+        text_page = text_pdf.new_page(width=595, height=842)  
+        text_rect = fitz.Rect(50, 50, 545, 800)
+        text_page.insert_textbox(text_rect, merged_text, fontsize=12, fontname="helv")
+        pdf_docs.insert(0, text_pdf)
 
-            output_path = "merged_output.pdf"
-            merged_doc.save(output_path)
+    merged_doc = fitz.open()
 
-            st.success("✅ Merged PDF is ready!")
-            st.download_button(
-                "Download Merged PDF",
-                open(output_path, "rb"),
-                file_name="merged_output.pdf",
-                mime="application/pdf"
-            )
+    for pdf in pdf_docs:
+        merged_doc.insert_pdf(pdf)
+
+    for img_file in image_files:
+        img = Image.open(img_file)
+        img_width, img_height = img.size
+        a4_width, a4_height = 595, 842
+        scale = min(a4_width / img_width, a4_height / img_height)
+        new_size = (int(img_width * scale), int(img_height * scale))
+        img = img.resize(new_size)
+        
+        img_pdf = fitz.open()
+        img_page = img_pdf.new_page(width=a4_width, height=a4_height)
+        img_bytes = BytesIO()
+        img.save(img_bytes, format="JPEG")
+        img_page.insert_image(fitz.Rect(0, 0, new_size[0], new_size[1]), stream=img_bytes.getvalue())
+
+        merged_doc.insert_pdf(img_pdf)
+
+    final_pdf_path = f"{pdf_name}.pdf"
+    merged_doc.save(final_pdf_path)
+
+    return f"PDF '{pdf_name}.pdf' is ready for download!", final_pdf_path
+
+# ✅ Fix: Ensure file selection dropdown updates correctly
+def reorder_files(files):
+    if not files:
+        return "Warning: Please upload files!", [], []
+
+    file_names = [file.name for file in files]
+    order_choices = list(range(len(file_names)))  # Ensure choices are properly set
+
+    return gr.update(value=file_names, choices=file_names), order_choices
+
+# ✅ Create Gradio interface
+with gr.Blocks() as demo:
+    gr.Markdown("# PDF Merger Tool")
+    gr.Markdown("Upload files, set order, and get your merged PDF!")
+
+    file_input = gr.Files(file_types=[".txt", ".docx", ".pdf", ".jpg", ".png", ".xlsx"], label="Upload Files", interactive=True)
+
+    order_input = gr.Dropdown([], multiselect=True, label="Select Order (Drag to Rearrange)", interactive=True)
+    
+    pdf_name_input = gr.Textbox(label="Enter PDF Name", value="Merged_Document")
+
+    submit_button = gr.Button("Merge & Download PDF")
+    output_message = gr.Textbox(label="Status")
+    output_pdf = gr.File(label="Download Merged PDF")
+
+    # ✅ Fix: Ensure file selection dropdown updates properly
+    file_input.change(reorder_files, [file_input], [order_input])
+
+    submit_button.click(process_files, [file_input, order_input, pdf_name_input], [output_message, output_pdf])
+
+# ✅ Launch Web App
+demo.launch(share=True)
