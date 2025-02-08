@@ -5,70 +5,58 @@ import pandas as pd
 from PIL import Image
 import os
 from io import BytesIO
-import tempfile
 
 def merge_files(file_list, order_list, pdf_name):
     """
-    Merge uploaded files into a single PDF according to the order_list.
+    Merge uploaded files (using their bytes from getvalue()) in the specified order.
     file_list: List of UploadedFile objects from st.file_uploader.
     order_list: List of integer indices representing the desired order.
     pdf_name: Name for the merged PDF.
     Returns: The merged PDF as bytes.
     """
-    pdf_docs = []    # Will hold PyMuPDF document objects (or a PDF generated from text)
-    image_files = [] # Will hold file paths for images
-    merged_text = "" # Accumulate text from TXT, DOCX, XLSX files
+    pdf_docs = []    # List to hold PyMuPDF document objects (or text turned into PDF)
+    image_files = [] # List to hold UploadedFile objects for images
+    merged_text = "" # To accumulate text content from TXT, DOCX, XLSX files
 
-    # Process each file in the specified order.
     for idx in order_list:
         try:
             file_obj = file_list[idx]
         except IndexError:
             st.error(f"Index {idx} is out of range for the uploaded files.")
             continue
+
         fname = file_obj.name
         ext = os.path.splitext(fname)[1].lower()
 
         if ext == ".txt":
             try:
-                text = file_obj.read().decode("utf-8")
+                # Decode the text bytes
+                text = file_obj.getvalue().decode("utf-8")
                 merged_text += text + "\n\n"
             except Exception as e:
                 st.error(f"Error reading {fname}: {e}")
         elif ext == ".docx":
-            # For DOCX, write the bytes to a temporary file and use python-docx.
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp:
-                tmp.write(file_obj.getvalue())
-                tmp_path = tmp.name
             try:
-                doc = docx.Document(tmp_path)
+                # Wrap the bytes in a BytesIO and read with python-docx
+                doc = docx.Document(BytesIO(file_obj.getvalue()))
                 text = "\n".join([para.text for para in doc.paragraphs])
                 merged_text += text + "\n\n"
             except Exception as e:
-                st.error(f"Error processing {fname}: {e}")
-            finally:
-                os.remove(tmp_path)
+                st.error(f"Error processing DOCX {fname}: {e}")
         elif ext == ".pdf":
-            # Write PDF bytes to a temporary file and open with PyMuPDF.
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-                tmp.write(file_obj.getvalue())
-                tmp_path = tmp.name
             try:
-                pdf = fitz.open(tmp_path)
+                # Open PDF from bytes stream; specify filetype so PyMuPDF knows it's a PDF
+                pdf = fitz.open(stream=file_obj.getvalue(), filetype="pdf")
                 pdf_docs.append(pdf)
             except Exception as e:
-                st.error(f"Error opening PDF {fname}: {e}")
-            finally:
-                os.remove(tmp_path)
+                st.error(f"Error processing PDF {fname}: {e}")
         elif ext in (".jpg", ".png"):
-            # For images, save the image bytes to a temporary file.
-            with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
-                tmp.write(file_obj.getvalue())
-                tmp_path = tmp.name
-            image_files.append(tmp_path)
+            # For images, we'll process later; just store the file object.
+            image_files.append(file_obj)
         elif ext == ".xlsx":
             try:
-                df = pd.read_excel(file_obj)
+                # Use BytesIO so that pandas reads from the file bytes
+                df = pd.read_excel(BytesIO(file_obj.getvalue()))
                 merged_text += df.to_string() + "\n\n"
             except Exception as e:
                 st.error(f"Error processing Excel file {fname}: {e}")
@@ -76,57 +64,48 @@ def merge_files(file_list, order_list, pdf_name):
     # If any text content was collected, convert it into a PDF page.
     if merged_text:
         text_pdf = fitz.open()
-        # Create a new A4 page (595 x 842 points)
-        text_page = text_pdf.new_page(width=595, height=842)
-        text_rect = fitz.Rect(50, 50, 545, 800)
+        text_page = text_pdf.new_page(width=595, height=842)  # A4 page size in points
+        text_rect = fitz.Rect(50, 50, 545, 800)  # Set margins
         text_page.insert_textbox(text_rect, merged_text, fontsize=12, fontname="helv")
-        pdf_docs.insert(0, text_pdf)
+        pdf_docs.insert(0, text_pdf)  # Prepend the text page
 
-    # Create a new PyMuPDF document to merge all pages.
+    # Create a new PDF document and merge all PDF pages.
     merged_doc = fitz.open()
     for pdf in pdf_docs:
         merged_doc.insert_pdf(pdf)
 
-    # Process each image: resize to fit an A4 page and add as a page.
-    for img_path in image_files:
+    # Process each image: open from BytesIO, resize to fit an A4 page, and add as a full page.
+    for img_obj in image_files:
         try:
-            img = Image.open(img_path)
-            img_width, img_height = img.size
+            im = Image.open(BytesIO(img_obj.getvalue()))
+            im_width, im_height = im.size
             a4_width, a4_height = 595, 842  # A4 dimensions in points
-            scale = min(a4_width / img_width, a4_height / img_height)
-            new_size = (int(img_width * scale), int(img_height * scale))
-            img = img.resize(new_size)
+            scale = min(a4_width / im_width, a4_height / im_height)
+            new_size = (int(im_width * scale), int(im_height * scale))
+            im = im.resize(new_size)
             img_pdf = fitz.open()
             img_page = img_pdf.new_page(width=a4_width, height=a4_height)
             img_bytes = BytesIO()
-            img.save(img_bytes, format="JPEG")
+            im.save(img_bytes, format="JPEG")
             img_page.insert_image(fitz.Rect(0, 0, new_size[0], new_size[1]), stream=img_bytes.getvalue())
             merged_doc.insert_pdf(img_pdf)
         except Exception as e:
-            st.error(f"Error processing image {img_path}: {e}")
-        finally:
-            if os.path.exists(img_path):
-                os.remove(img_path)
+            st.error(f"Error processing image {img_obj.name}: {e}")
 
-    # Save the merged PDF to a temporary file.
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-        merged_doc.save(tmp.name)
-        merged_pdf_path = tmp.name
-
-    # Read the merged PDF as bytes.
-    with open(merged_pdf_path, "rb") as f:
-        merged_pdf_bytes = f.read()
-    os.remove(merged_pdf_path)
-    return merged_pdf_bytes
+    # Save the merged PDF to a BytesIO object.
+    output = BytesIO()
+    merged_doc.save(output)
+    output.seek(0)
+    return output.getvalue()
 
 # Streamlit UI
 st.title("PDF Merger Tool")
 
-st.write("Upload files (TXT, DOCX, PDF, JPG, PNG, XLSX) and specify the order (comma-separated indices).")
+st.write("Upload files (TXT, DOCX, PDF, JPG, PNG, XLSX) and specify the order as comma-separated indices.")
 
 # Upload multiple files.
 uploaded_files = st.file_uploader("Upload Files", accept_multiple_files=True)
-# Show the list of uploaded file names with their indices.
+
 if uploaded_files:
     st.write("Uploaded Files:")
     for i, f in enumerate(uploaded_files):
@@ -144,7 +123,6 @@ if st.button("Merge PDF"):
     else:
         try:
             if order_input.strip() == "":
-                # If no order is provided, use natural order.
                 order_list = list(range(len(uploaded_files)))
             else:
                 order_list = [int(x.strip()) for x in order_input.split(",")]
